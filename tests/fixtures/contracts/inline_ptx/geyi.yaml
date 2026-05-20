@@ -1,0 +1,27 @@
+version: 1
+source:
+  files: [inline_ptx.cu]
+  entry: inline_ptx_add
+launch:
+  grid: ["ceil_div(n, 256)"]
+  block: [256]
+  shared_memory: 0
+tensors:
+  a:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: read
+  b:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: read
+  out:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: write
+verification:
+  reference: gpu
+

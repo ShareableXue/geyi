@@ -1,0 +1,2 @@
+This fixture represents a compiled extension or Python callable without CUDA source.
+

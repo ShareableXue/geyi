@@ -1,0 +1,23 @@
+version: 1
+source:
+  files: [vector_add.cu]
+  entry: vector_add
+tensors:
+  a:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: read
+  b:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: read
+  out:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: write
+verification:
+  reference: gpu
+

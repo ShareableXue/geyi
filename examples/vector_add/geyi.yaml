@@ -1,0 +1,44 @@
+version: 1
+
+source:
+  files:
+    - vector_add.cu
+  entry: vector_add
+
+launch:
+  grid: ["ceil_div(n, 256)"]
+  block: [256]
+  shared_memory: 0
+
+symbols:
+  n: 1048576
+
+tensors:
+  a:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: read
+  b:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: read
+  out:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: write
+
+assumptions:
+  - id: contiguous_1d
+    text: "a, b, out are contiguous 1D tensors"
+  - id: no_alias
+    text: "out does not alias a or b"
+
+verification:
+  reference: gpu
+  tolerance:
+    atol: 1e-5
+    rtol: 1e-5
+

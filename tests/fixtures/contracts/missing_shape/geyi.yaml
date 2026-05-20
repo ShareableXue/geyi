@@ -1,0 +1,24 @@
+version: 1
+source:
+  files: [vector_add.cu]
+  entry: vector_add
+launch:
+  grid: ["ceil_div(n, 256)"]
+  block: [256]
+  shared_memory: 0
+tensors:
+  a:
+    dtype: float32
+    stride: [1]
+    access: read
+  b:
+    dtype: float32
+    stride: [1]
+    access: read
+  out:
+    dtype: float32
+    stride: [1]
+    access: write
+verification:
+  reference: gpu
+

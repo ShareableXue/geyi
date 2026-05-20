@@ -1,0 +1,23 @@
+version: 1
+source:
+  black_box: true
+  entry: black_box_add
+tensors:
+  a:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: read
+  b:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: read
+  out:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: write
+verification:
+  reference: golden
+
