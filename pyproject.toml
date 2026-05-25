@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "geyi"
 version = "0.0.1"
-description = "Geyi Phase -1 contract prototype"
+description = "Geyi Phase 0 end-to-end migration prototype"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = ["PyYAML>=6.0"]

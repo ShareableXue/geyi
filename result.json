@@ -1,0 +1,326 @@
+{
+  "assumptions": [
+    {
+      "can_validate": true,
+      "id": "contiguous_1d",
+      "required_for": [
+        "correctness"
+      ],
+      "source": "user",
+      "text": "a, b, out are contiguous 1D tensors"
+    },
+    {
+      "can_validate": true,
+      "id": "no_alias",
+      "required_for": [
+        "correctness"
+      ],
+      "source": "user",
+      "text": "out does not alias a or b"
+    }
+  ],
+  "confidence": 0.99,
+  "confidence_band": "certain",
+  "contract_hash": "3023e8c86fbf9852",
+  "control_flow": [
+    {
+      "affected_intents": [
+        "elementwise.add"
+      ],
+      "condition": "idx < n",
+      "confidence": 0.99,
+      "data_dependent": false,
+      "evidence": [
+        "scan.store"
+      ],
+      "kind": "guarded_store"
+    }
+  ],
+  "cuda_features": [],
+  "effects": [
+    {
+      "commutative": true,
+      "confidence": 0.99,
+      "deterministic": true,
+      "evidence": [
+        "scan.store",
+        "scan.intent"
+      ],
+      "kind": "pure_store",
+      "operation": "add",
+      "target": "out"
+    }
+  ],
+  "entry": "vector_add",
+  "evidence": [
+    {
+      "claim": "found __global__ kernel vector_add",
+      "confidence": 0.98,
+      "contradicts": [],
+      "details": {
+        "line": 1
+      },
+      "id": "scan.kernel",
+      "kind": "source_ast",
+      "span": null,
+      "supports": [],
+      "weight": null
+    },
+    {
+      "claim": "idx is blockIdx.x * blockDim.x + threadIdx.x",
+      "confidence": 0.99,
+      "contradicts": [],
+      "details": {},
+      "id": "scan.idx",
+      "kind": "source_ast",
+      "span": null,
+      "supports": [],
+      "weight": null
+    },
+    {
+      "claim": "single guarded store to out[idx]",
+      "confidence": 0.98,
+      "contradicts": [],
+      "details": {},
+      "id": "scan.store",
+      "kind": "source_ast",
+      "span": null,
+      "supports": [],
+      "weight": null
+    },
+    {
+      "claim": "recognized 1D elementwise add",
+      "confidence": 0.98,
+      "contradicts": [],
+      "details": {},
+      "id": "scan.intent",
+      "kind": "source_ast",
+      "span": null,
+      "supports": [],
+      "weight": null
+    },
+    {
+      "claim": "tensor metadata provided by geyi.yaml",
+      "confidence": 1.0,
+      "contradicts": [],
+      "details": {},
+      "id": "spec.tensors",
+      "kind": "user_annotation",
+      "span": null,
+      "supports": [
+        "tensors",
+        "memory_spaces"
+      ],
+      "weight": null
+    },
+    {
+      "claim": "launch grid/block provided by geyi.yaml",
+      "confidence": 1.0,
+      "contradicts": [],
+      "details": {},
+      "id": "spec.launch",
+      "kind": "user_annotation",
+      "span": null,
+      "supports": [
+        "launch"
+      ],
+      "weight": null
+    }
+  ],
+  "intents": [
+    {
+      "access_patterns": [
+        {
+          "affine": true,
+          "contiguous": true,
+          "evidence": [
+            "scan.idx",
+            "scan.store"
+          ],
+          "guards": [
+            "idx < n"
+          ],
+          "indices": [
+            "idx"
+          ],
+          "tensor": "a"
+        },
+        {
+          "affine": true,
+          "contiguous": true,
+          "evidence": [
+            "scan.idx",
+            "scan.store"
+          ],
+          "guards": [
+            "idx < n"
+          ],
+          "indices": [
+            "idx"
+          ],
+          "tensor": "b"
+        },
+        {
+          "affine": true,
+          "contiguous": true,
+          "evidence": [
+            "scan.idx",
+            "scan.store"
+          ],
+          "guards": [
+            "idx < n"
+          ],
+          "indices": [
+            "idx"
+          ],
+          "tensor": "out"
+        }
+      ],
+      "axes": [
+        "idx"
+      ],
+      "confidence": 0.99,
+      "evidence": [
+        "scan.intent",
+        "scan.idx",
+        "scan.store"
+      ],
+      "expression": "out[idx] = a[idx] + b[idx]",
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "kind": "elementwise",
+      "outputs": [
+        "out"
+      ],
+      "reduction_axes": [],
+      "subkind": "add"
+    }
+  ],
+  "launch": {
+    "block": [
+      "256"
+    ],
+    "evidence": [
+      "spec.launch"
+    ],
+    "grid": [
+      "ceil_div(n, 256)"
+    ],
+    "shared_memory": "0",
+    "stream": null
+  },
+  "memory_spaces": [
+    {
+      "confidence": 0.99,
+      "evidence": [
+        "spec.tensors"
+      ],
+      "layout": "contiguous",
+      "lifetime": "kernel",
+      "name": "a",
+      "shape": [
+        "n"
+      ],
+      "space": "global",
+      "used_by": [
+        "elementwise.add",
+        "effect.pure_store.out"
+      ]
+    },
+    {
+      "confidence": 0.99,
+      "evidence": [
+        "spec.tensors"
+      ],
+      "layout": "contiguous",
+      "lifetime": "kernel",
+      "name": "b",
+      "shape": [
+        "n"
+      ],
+      "space": "global",
+      "used_by": [
+        "elementwise.add",
+        "effect.pure_store.out"
+      ]
+    },
+    {
+      "confidence": 0.99,
+      "evidence": [
+        "spec.tensors"
+      ],
+      "layout": "contiguous",
+      "lifetime": "kernel",
+      "name": "out",
+      "shape": [
+        "n"
+      ],
+      "space": "global",
+      "used_by": [
+        "elementwise.add",
+        "effect.pure_store.out"
+      ]
+    }
+  ],
+  "name": "vector_add",
+  "recommended_path": "rule",
+  "rejections": [],
+  "source_files": [
+    "examples/vector_add/vector_add.cu"
+  ],
+  "sync": [],
+  "tensors": {
+    "a": {
+      "access": "read",
+      "alias_group": null,
+      "dtype": "float32",
+      "evidence": [
+        "spec.tensors"
+      ],
+      "layout": "contiguous",
+      "name": "a",
+      "shape": [
+        "n"
+      ],
+      "stride": [
+        "1"
+      ]
+    },
+    "b": {
+      "access": "read",
+      "alias_group": null,
+      "dtype": "float32",
+      "evidence": [
+        "spec.tensors"
+      ],
+      "layout": "contiguous",
+      "name": "b",
+      "shape": [
+        "n"
+      ],
+      "stride": [
+        "1"
+      ]
+    },
+    "out": {
+      "access": "write",
+      "alias_group": null,
+      "dtype": "float32",
+      "evidence": [
+        "spec.tensors"
+      ],
+      "layout": "contiguous",
+      "name": "out",
+      "shape": [
+        "n"
+      ],
+      "stride": [
+        "1"
+      ]
+    }
+  },
+  "unknowns": [],
+  "verification_required": "gpu"
+}
