@@ -26,6 +26,7 @@ SUPPORTED_TEMPLATES = {
     "tilelang.copy_cast_1d",
     "tilelang.transpose2d",
     "tilelang.row_reduce_sum",
+    "tilelang.fused_add_relu_1d",
 }
 
 
@@ -149,6 +150,8 @@ def render_kernel(plan: TranslationPlan) -> str:
         return render_transpose2d(plan)
     if plan.template == "tilelang.row_reduce_sum":
         return render_row_reduce_sum(plan)
+    if plan.template == "tilelang.fused_add_relu_1d":
+        return render_fused_add_relu(plan)
     raise BackendError("unsupported template: %s" % plan.template)
 
 
@@ -247,6 +250,25 @@ def {entry}({a}, {out}, rows, cols):
         {out}[row] = acc
     return {out}
 """.format(entry=safe_entry(plan), a=inputs[0], out=output)
+
+
+def render_fused_add_relu(plan: TranslationPlan) -> str:
+    inputs = safe_names(plan.parameters["inputs"])
+    output = safe_name(plan.parameters["output"])
+    if len(inputs) != 2:
+        raise BackendError("fused_add_relu requires two inputs")
+    body = """
+def {entry}({a}, {b}, {out}, n):
+    n = int(n)
+    validate_1d(n, {a}, {b}, {out})
+    for idx in range(n):
+        value = float({a}[idx]) + float({b}[idx])
+        {out}[idx] = value if value > 0.0 else 0.0
+    return {out}
+""".format(entry=safe_entry(plan), a=inputs[0], b=inputs[1], out=output)
+    if plan.parameters.get("debug_force_syntax_error"):
+        body += "\ndef broken_python(:\n    pass\n"
+    return header(plan) + body
 
 
 def header(plan: TranslationPlan, needs_math: bool = False) -> str:

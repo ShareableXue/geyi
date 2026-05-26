@@ -28,11 +28,14 @@ from .evidence.scanner import ScannerResult, scan_cuda_source
 from .session import SessionStore
 
 
-ELEMENTWISE_OPS = {"add", "mul", "relu", "neg", "exp"}
+DETERMINISTIC_ELEMENTWISE_OPS = {"add", "mul", "relu", "neg", "exp"}
+COMPOSITE_ELEMENTWISE_OPS = {"fused_add_relu"}
+ELEMENTWISE_OPS = DETERMINISTIC_ELEMENTWISE_OPS | COMPOSITE_ELEMENTWISE_OPS
 COPY_OPS = {"copy", "cast"}
 TRANSPOSE_OPS = {"transpose2d"}
 REDUCE_OPS = {"row_sum"}
-SUPPORTED_RULE_OPS = ELEMENTWISE_OPS | COPY_OPS | TRANSPOSE_OPS | REDUCE_OPS
+SUPPORTED_RULE_OPS = DETERMINISTIC_ELEMENTWISE_OPS | COPY_OPS | TRANSPOSE_OPS | REDUCE_OPS
+PURE_STORE_OPS = ELEMENTWISE_OPS | COPY_OPS | TRANSPOSE_OPS | REDUCE_OPS
 
 
 @dataclass
@@ -281,6 +284,15 @@ def build_intents(
         expression = None
         if scanner.expression and scanner.write_tensor and scanner.write_index:
             expression = "%s[%s] = %s" % (scanner.write_tensor, scanner.write_index, scanner.expression)
+        if scanner.operation in COMPOSITE_ELEMENTWISE_OPS:
+            unknowns.append(
+                Unknown(
+                    id="template_gap.%s" % scanner.operation,
+                    text="recognized %s but deterministic Phase 1 has no direct rule template" % scanner.operation,
+                    impact="planning",
+                    suggested_resolution="allow LLM planner to choose a constrained composite template",
+                )
+            )
         return [
             ComputeIntent(
                 kind="elementwise",
@@ -378,7 +390,7 @@ def build_effects(
     evidence: List[Evidence],
     unknowns: List[Unknown],
 ) -> List[EffectContract]:
-    if scanner.operation in SUPPORTED_RULE_OPS and scanner.write_tensor:
+    if scanner.operation in PURE_STORE_OPS and scanner.write_tensor:
         return [
             EffectContract(
                 kind="pure_store",
@@ -546,7 +558,7 @@ def is_rule_covered(
         return False
     intent = intents[0]
     supported_intent = (
-        (intent.kind == "elementwise" and intent.subkind in ELEMENTWISE_OPS)
+        (intent.kind == "elementwise" and intent.subkind in DETERMINISTIC_ELEMENTWISE_OPS)
         or (intent.kind == "copy" and intent.subkind in COPY_OPS)
         or (intent.kind == "transpose" and intent.subkind == "2d_contiguous")
         or (intent.kind == "reduce" and intent.subkind == "row_sum")

@@ -6,6 +6,7 @@ import json
 import shlex
 
 from geyi.phase1 import run_phase1
+from geyi.phase2 import run_phase2
 
 
 def add_arguments(parser) -> None:
@@ -17,19 +18,39 @@ def add_arguments(parser) -> None:
     parser.add_argument("--npu-arch", default="dav-2201", help="AscendC NPU architecture, e.g. dav-2201 or dav-3510")
     parser.add_argument("--json", action="store_true", help="print verification report JSON")
     parser.add_argument("--session-root", default=".geyi/sessions", help="session artifact root")
+    parser.add_argument("--allow-llm-plan", action="store_true", help="allow Phase 2 constrained LLM planner")
+    parser.add_argument("--llm-provider", default="mock", choices=["mock", "openai-compatible", "deepseek"], help="LLM provider for planner")
+    parser.add_argument("--llm-model", default=None, help="LLM model name")
+    parser.add_argument("--llm-base-url", default=None, help="OpenAI-compatible chat completions endpoint")
 
 
 def run(args) -> int:
-    result = run_phase1(
-        args.source,
-        spec=args.spec,
-        out=args.out,
-        session_root=args.session_root,
-        reproducible_command=reproducible_command(args),
-        backend=args.backend,
-        target=args.target,
-        npu_arch=args.npu_arch,
-    )
+    if args.allow_llm_plan:
+        result = run_phase2(
+            args.source,
+            spec=args.spec,
+            out=args.out,
+            session_root=args.session_root,
+            reproducible_command=reproducible_command(args),
+            backend=args.backend,
+            target=args.target,
+            npu_arch=args.npu_arch,
+            allow_llm_plan=True,
+            llm_provider=args.llm_provider,
+            llm_model=args.llm_model,
+            llm_base_url=args.llm_base_url,
+        )
+    else:
+        result = run_phase1(
+            args.source,
+            spec=args.spec,
+            out=args.out,
+            session_root=args.session_root,
+            reproducible_command=reproducible_command(args),
+            backend=args.backend,
+            target=args.target,
+            npu_arch=args.npu_arch,
+        )
     if args.json:
         print(json.dumps(result.verification_report.to_dict(), indent=2, sort_keys=True))
     else:
@@ -46,6 +67,7 @@ def print_text_report(result) -> None:
     print("Generated: %s" % result.project.root)
     print("Artifact: %s hash=%s reused=%s" % (result.artifact.path, report.artifact_hash, result.artifact.reused))
     print("Verify: %s passed=%s max_abs_diff=%s" % (report.level.value, report.passed, report.max_abs_diff))
+    print("LLM: used=%s calls=%d" % (report.llm_used, len(getattr(report, "llm_calls", []) or [])))
     print("Coverage: shapes=%s dtypes=%s hardware=%s" % (report.coverage.shapes, report.coverage.dtypes, report.coverage.hardware))
     print("Out: %s cache_hit=%s" % (result.out_path, result.cache_hit))
     print("Session: %s" % result.analysis.session.path)
@@ -61,4 +83,12 @@ def reproducible_command(args) -> str:
         pieces.extend(["--npu-arch", args.npu_arch])
     if args.out:
         pieces.extend(["--out", args.out])
+    if getattr(args, "allow_llm_plan", False):
+        pieces.append("--allow-llm-plan")
+        if args.llm_provider != "mock":
+            pieces.extend(["--llm-provider", args.llm_provider])
+        if args.llm_model:
+            pieces.extend(["--llm-model", args.llm_model])
+        if args.llm_base_url:
+            pieces.extend(["--llm-base-url", args.llm_base_url])
     return " ".join(shlex.quote(str(item)) for item in pieces)

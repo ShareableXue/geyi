@@ -46,9 +46,9 @@ class VerificationReport:
     reproducible_commands: List[str] = field(default_factory=list)
     case_results: List[Dict[str, Any]] = field(default_factory=list)
     cache: Dict[str, Any] = field(default_factory=dict)
+    llm_calls: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         payload = to_jsonable(self)
         payload["level"] = self.level.value
         return payload
-

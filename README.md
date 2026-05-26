@@ -1,6 +1,6 @@
 # Geyi
 
-Phase 0 first end-to-end MVP.
+Phase 2 constrained LLM planner prototype.
 
 ## Install
 
@@ -47,7 +47,7 @@ This prints the Semantic Contract JSON and writes session artifacts under:
 └── logs/
 ```
 
-## Phase 0 Run
+## Phase 1 Run
 
 Run the first end-to-end MVP:
 
@@ -58,7 +58,7 @@ geyi run examples/vector_add/vector_add.cu \
   --out .geyi/out/vector_add
 ```
 
-This closes the Phase 0 loop:
+This closes the deterministic Phase 1 loop:
 
 ```text
 CUDA source + geyi.yaml
@@ -83,7 +83,60 @@ Session artifacts include:
 └── logs/
 ```
 
-Phase 0 currently supports only 1D contiguous `float32` `vector_add`.
+Phase 1 currently supports deterministic 1D elementwise unary/binary, copy/cast,
+2D contiguous transpose, and row-wise reduce sum.
+
+## Phase 2 LLM Planner
+
+Run the template-gap example through the constrained planner:
+
+```bash
+conda activate geyi_dev
+geyi run examples/template_gap/fused_add_relu.cu \
+  --spec examples/template_gap/geyi.yaml \
+  --allow-llm-plan
+```
+
+The default Phase 2 provider is `mock`, so this works offline and still writes
+transparent LLM usage metadata. Real OpenAI-compatible calls require an API key:
+
+```bash
+geyi run examples/template_gap/fused_add_relu.cu \
+  --spec examples/template_gap/geyi.yaml \
+  --allow-llm-plan \
+  --llm-provider openai-compatible
+```
+
+DeepSeek is available as a first-class OpenAI-compatible provider:
+
+```bash
+export DEEPSEEK_API_KEY=...
+geyi run examples/template_gap/fused_add_relu.cu \
+  --spec examples/template_gap/geyi.yaml \
+  --allow-llm-plan \
+  --llm-provider deepseek
+```
+
+You can manually switch provider, model, and endpoint per run:
+
+```bash
+geyi run examples/template_gap/fused_add_relu.cu \
+  --spec examples/template_gap/geyi.yaml \
+  --allow-llm-plan \
+  --llm-provider deepseek \
+  --llm-model deepseek-v4-pro
+
+geyi run examples/template_gap/fused_add_relu.cu \
+  --spec examples/template_gap/geyi.yaml \
+  --allow-llm-plan \
+  --llm-provider openai-compatible \
+  --llm-model vendor-model-name \
+  --llm-base-url https://your-gateway.example/v1/chat/completions
+```
+
+The Phase 2 path keeps LLM output constrained to planner JSON. Geyi still owns
+template code generation, compile, golden verification, repair handoff, and the
+final verification report.
 
 ## Workflow
 
@@ -106,7 +159,7 @@ geyi info kernel.cu --spec geyi.yaml --json
    - `rejections`
    - `.geyi/sessions/<session_id>/confidence_report.json`
 
-Use `geyi info` first when you want to inspect the contract and confidence report without generating a Phase 0 project. Use `geyi run` for the supported Phase 0 vector-add end-to-end path.
+Use `geyi info` first when you want to inspect the contract and confidence report without generating a project. Use `geyi run` for deterministic paths, and add `--allow-llm-plan` only when a contract routes to the Phase 2 planner.
 
 ## Verify The Prototype
 

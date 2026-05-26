@@ -159,6 +159,8 @@ def cap_for_unknown(unknown: Unknown) -> ConfidenceCap:
         return ConfidenceCap(uid, 0.55, unknown.text, "correctness_unknown")
     if uid == "control_flow_unknown":
         return ConfidenceCap(uid, 0.60, unknown.text, "correctness_unknown")
+    if uid.startswith("template_gap"):
+        return ConfidenceCap(uid, 0.70, unknown.text, "planning_gap")
     return ConfidenceCap(uid, 0.70, unknown.text, "unknown")
 
 

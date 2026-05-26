@@ -21,6 +21,7 @@ def verify_with_golden(
     artifact: CompiledArtifact,
     reproducible_command: Optional[str] = None,
     cache_hit: bool = False,
+    llm_usage: Optional[List[dict]] = None,
 ) -> VerificationReport:
     module = load_generated_module(project)
     entry = plan.operator_entry or contract.entry
@@ -62,11 +63,12 @@ def verify_with_golden(
         unknowns=[unknown.id for unknown in contract.unknowns],
         strategy=plan.strategy,
         backend=plan.backend,
-        llm_used=False,
+        llm_used=bool(llm_usage),
         passed=passed,
         reproducible_commands=commands,
         case_results=case_results,
         cache={"hit": cache_hit, "artifact_reused": artifact.reused},
+        llm_calls=list(llm_usage or []),
     )
 
 
@@ -76,6 +78,8 @@ def run_case(kernel, plan: TranslationPlan, case: Dict[str, object], tolerance: 
         return run_elementwise_binary_case(kernel, plan, case, tolerance)
     if operation in {"relu", "neg", "exp"}:
         return run_elementwise_unary_case(kernel, plan, case, tolerance)
+    if operation == "fused_add_relu":
+        return run_fused_add_relu_case(kernel, plan, case, tolerance)
     if operation in {"copy", "cast"}:
         return run_copy_cast_case(kernel, plan, case, tolerance)
     if operation == "transpose2d":
@@ -120,6 +124,23 @@ def run_elementwise_unary_case(kernel, plan: TranslationPlan, case: Dict[str, ob
         import math
 
         expected = [math.exp(float(value)) for value in a]
+    return with_case_metadata(case, compare(out, expected, tolerance), output)
+
+
+def run_fused_add_relu_case(kernel, plan: TranslationPlan, case: Dict[str, object], tolerance: Dict[str, float]) -> dict:
+    n = int(case["n"])
+    dtypes = dict(plan.parameters.get("dtypes") or {})
+    inputs = list(plan.parameters["inputs"])
+    output = str(plan.parameters["output"])
+    a = make_values(n, dtype=dtypes.get(inputs[0], "float32"), seed=19)
+    b = make_values(n, dtype=dtypes.get(inputs[1], "float32"), seed=53)
+    out = [-777.0 for _ in range(n)]
+    kernel(a, b, out, n)
+
+    expected = []
+    for index in range(n):
+        value = float(a[index]) + float(b[index])
+        expected.append(value if value > 0.0 else 0.0)
     return with_case_metadata(case, compare(out, expected, tolerance), output)
 
 

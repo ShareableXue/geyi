@@ -119,7 +119,7 @@ def scan_cuda_source(source_path: Optional[str], entry: str = "", black_box: boo
     )
 
     extract_grid_indices(selected, result)
-    if not extract_row_reduce(selected, result):
+    if not extract_fused_add_relu(selected, result) and not extract_row_reduce(selected, result):
         extract_store(selected, result)
         classify_operation(result)
     return result
@@ -291,6 +291,71 @@ def extract_row_reduce(kernel: KernelScan, result: ScannerResult) -> bool:
             "id": "scan.intent",
             "claim": "recognized row-wise contiguous reduce sum",
             "confidence": 0.96,
+        }
+    )
+    return True
+
+
+def extract_fused_add_relu(kernel: KernelScan, result: ScannerResult) -> bool:
+    if not result.idx_var:
+        return False
+
+    idx = result.idx_var
+    assign = (
+        r"(?:float|double|half)\s+(?P<tmp>\w+)\s*=\s*"
+        r"(?P<a>\w+)\s*\[\s*(?P<idx_a>[^\]]+)\s*\]\s*\+\s*"
+        r"(?P<b>\w+)\s*\[\s*(?P<idx_b>[^\]]+)\s*\]\s*;"
+    )
+    relu = (
+        r"(?P<out>\w+)\s*\[\s*(?P<out_idx>[^\]]+)\s*\]\s*=\s*"
+        r"(?:(?P=tmp)\s*>\s*0(?:\.0)?f?\s*\?\s*(?P=tmp)\s*:\s*0(?:\.0)?f?"
+        r"|(?:fmaxf|max)\s*\(\s*(?P=tmp)\s*,\s*0(?:\.0)?f?\s*\))\s*;"
+    )
+    match = re.search(assign + r"\s*" + relu, kernel.body, re.S)
+    if not match:
+        return False
+    if normalize_index(match.group("idx_a")) != normalize_index(idx):
+        return False
+    if normalize_index(match.group("idx_b")) != normalize_index(idx):
+        return False
+    if normalize_index(match.group("out_idx")) != normalize_index(idx):
+        return False
+
+    result.operation = "fused_add_relu"
+    result.write_tensor = match.group("out")
+    result.write_index = compact(match.group("out_idx"))
+    result.expression = "%s[%s] = relu(%s[%s] + %s[%s])" % (
+        result.write_tensor,
+        result.write_index,
+        match.group("a"),
+        compact(match.group("idx_a")),
+        match.group("b"),
+        compact(match.group("idx_b")),
+    )
+    result.read_tensors = [match.group("a"), match.group("b")]
+    result.read_indices = {
+        match.group("a"): [compact(match.group("idx_a"))],
+        match.group("b"): [compact(match.group("idx_b"))],
+        result.write_tensor: [result.write_index],
+    }
+    guard = re.search(r"if\s*\((?P<cond>[^)]*)\)", kernel.body, re.S)
+    if guard:
+        result.guarded = True
+        result.guard_condition = compact(guard.group("cond"))
+        result.dimensions = infer_dimensions_from_guard(result)
+
+    result.evidence.append(
+        {
+            "id": "scan.store",
+            "claim": "single guarded fused add+relu store to %s[%s]" % (result.write_tensor, result.write_index),
+            "confidence": 0.95,
+        }
+    )
+    result.evidence.append(
+        {
+            "id": "scan.intent",
+            "claim": "recognized 1D fused add followed by relu",
+            "confidence": 0.92,
         }
     )
     return True
