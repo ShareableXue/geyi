@@ -94,7 +94,7 @@ def evaluate_confidence(
     if strongest_contradiction:
         evidence_score *= 1.0 - strongest_contradiction
 
-    caps = [ConfidenceCap("calibration.phase_minus_1", 0.99, "Phase -1 fixture calibration cap", "calibration")]
+    caps = [ConfidenceCap("calibration.deterministic", 0.99, "deterministic rule calibration cap", "calibration")]
     for unknown in unknowns:
         cap = cap_for_unknown(unknown)
         if cap is not None:
@@ -174,4 +174,3 @@ def route_for(score: float, has_rejection: bool, has_unknown: bool, rule_covered
     if score >= 0.20:
         return "llm_draft"
     return "human"
-

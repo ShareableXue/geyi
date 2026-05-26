@@ -1,0 +1,35 @@
+version: 1
+
+source:
+  files: [relu.cu]
+  entry: elementwise_relu
+
+launch:
+  grid: ["ceil_div(n, 256)"]
+  block: [256]
+  shared_memory: 0
+
+symbols:
+  n: 1048576
+
+tensors:
+  x:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: read
+  out:
+    dtype: float32
+    shape: ["n"]
+    stride: [1]
+    access: write
+
+assumptions:
+  - id: no_alias
+    text: "out does not alias x"
+
+verification:
+  reference: golden
+  tolerance:
+    atol: 1e-5
+    rtol: 1e-5

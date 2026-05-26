@@ -28,6 +28,13 @@ from .evidence.scanner import ScannerResult, scan_cuda_source
 from .session import SessionStore
 
 
+ELEMENTWISE_OPS = {"add", "mul", "relu", "neg", "exp"}
+COPY_OPS = {"copy", "cast"}
+TRANSPOSE_OPS = {"transpose2d"}
+REDUCE_OPS = {"row_sum"}
+SUPPORTED_RULE_OPS = ELEMENTWISE_OPS | COPY_OPS | TRANSPOSE_OPS | REDUCE_OPS
+
+
 @dataclass
 class AnalysisResult:
     contract: SemanticContract
@@ -269,25 +276,11 @@ def build_intents(
     evidence: List[Evidence],
     unknowns: List[Unknown],
 ) -> List[ComputeIntent]:
-    if scanner.operation in {"add", "mul"} and scanner.write_tensor:
-        intent_evidence = ["scan.intent", "scan.idx", "scan.store"]
+    if scanner.operation in ELEMENTWISE_OPS and scanner.write_tensor:
+        intent_evidence = ["scan.intent", "scan.store"]
         expression = None
         if scanner.expression and scanner.write_tensor and scanner.write_index:
             expression = "%s[%s] = %s" % (scanner.write_tensor, scanner.write_index, scanner.expression)
-        access_patterns = []
-        for tensor in scanner.read_tensors + [scanner.write_tensor]:
-            if not tensor:
-                continue
-            access_patterns.append(
-                AccessPattern(
-                    tensor=tensor,
-                    indices=[scanner.idx_var or "idx"],
-                    affine=True,
-                    contiguous=True,
-                    guards=[scanner.guard_condition] if scanner.guard_condition else [],
-                    evidence=["scan.idx", "scan.store"],
-                )
-            )
         return [
             ComputeIntent(
                 kind="elementwise",
@@ -296,18 +289,67 @@ def build_intents(
                 axes=[scanner.idx_var or "idx"],
                 inputs=scanner.read_tensors,
                 outputs=[scanner.write_tensor],
-                access_patterns=access_patterns,
+                access_patterns=build_access_patterns(scanner),
                 confidence=0.0,
                 evidence=intent_evidence,
+            )
+        ]
+
+    if scanner.operation in COPY_OPS and scanner.write_tensor:
+        expression = None
+        if scanner.expression and scanner.write_index:
+            expression = "%s[%s] = %s" % (scanner.write_tensor, scanner.write_index, scanner.expression)
+        return [
+            ComputeIntent(
+                kind="copy",
+                subkind=scanner.operation,
+                expression=expression,
+                axes=[scanner.idx_var or "idx"],
+                inputs=scanner.read_tensors,
+                outputs=[scanner.write_tensor],
+                access_patterns=build_access_patterns(scanner),
+                confidence=0.0,
+                evidence=["scan.intent", "scan.store"],
+            )
+        ]
+
+    if scanner.operation in TRANSPOSE_OPS and scanner.write_tensor:
+        return [
+            ComputeIntent(
+                kind="transpose",
+                subkind="2d_contiguous",
+                expression="%s[%s] = %s" % (scanner.write_tensor, scanner.write_index, scanner.expression),
+                axes=[scanner.index_vars.get("row", "row"), scanner.index_vars.get("col", "col")],
+                inputs=scanner.read_tensors,
+                outputs=[scanner.write_tensor],
+                access_patterns=build_access_patterns(scanner),
+                confidence=0.0,
+                evidence=["scan.intent", "scan.store"],
+            )
+        ]
+
+    if scanner.operation in REDUCE_OPS and scanner.write_tensor:
+        return [
+            ComputeIntent(
+                kind="reduce",
+                subkind="row_sum",
+                expression=scanner.expression,
+                axes=[scanner.index_vars.get("linear") or scanner.index_vars.get("x") or "row"],
+                reduction_axes=[scanner.reduction_axis or "col"],
+                inputs=scanner.read_tensors,
+                outputs=[scanner.write_tensor],
+                access_patterns=build_access_patterns(scanner),
+                confidence=0.0,
+                evidence=["scan.intent", "scan.store"],
             )
         ]
 
     unknowns.append(
         Unknown(
             id="no_supported_intent",
-            text="scanner could not classify the source as a Phase -1 supported intent",
+            text="scanner could not classify the source as a Phase 1 supported intent",
             impact="correctness",
-            suggested_resolution="provide a 1D contiguous elementwise add/mul kernel or wait for a later phase",
+            suggested_resolution="provide a supported contiguous elementwise, copy/cast, transpose2d, or row-reduce kernel",
         )
     )
     evidence.append(
@@ -336,14 +378,14 @@ def build_effects(
     evidence: List[Evidence],
     unknowns: List[Unknown],
 ) -> List[EffectContract]:
-    if scanner.operation in {"add", "mul"} and scanner.write_tensor:
+    if scanner.operation in SUPPORTED_RULE_OPS and scanner.write_tensor:
         return [
             EffectContract(
                 kind="pure_store",
                 target=scanner.write_tensor,
                 operation=scanner.operation,
                 deterministic=True,
-                commutative=scanner.operation in {"add", "mul"},
+                commutative=scanner.operation in {"add", "mul", "row_sum"},
                 evidence=["scan.store", "scan.intent"],
             )
         ]
@@ -452,6 +494,44 @@ def build_memory_spaces(
     ]
 
 
+def build_access_patterns(scanner: ScannerResult) -> List[AccessPattern]:
+    patterns: List[AccessPattern] = []
+    guards = [scanner.guard_condition] if scanner.guard_condition else []
+    for tensor in scanner.read_tensors:
+        if not tensor:
+            continue
+        patterns.append(
+            AccessPattern(
+                tensor=tensor,
+                indices=list(scanner.read_indices.get(tensor) or default_indices(scanner)),
+                affine=True,
+                contiguous=True,
+                guards=guards,
+                evidence=["scan.intent", "scan.store"],
+            )
+        )
+    if scanner.write_tensor:
+        patterns.append(
+            AccessPattern(
+                tensor=scanner.write_tensor,
+                indices=[scanner.write_index] if scanner.write_index else default_indices(scanner),
+                affine=True,
+                contiguous=True,
+                guards=guards,
+                evidence=["scan.intent", "scan.store"],
+            )
+        )
+    return patterns
+
+
+def default_indices(scanner: ScannerResult) -> List[str]:
+    if scanner.rank == 2:
+        row = scanner.index_vars.get("row", "row")
+        col = scanner.index_vars.get("col", "col")
+        return [row, col]
+    return [scanner.idx_var or "idx"]
+
+
 def is_rule_covered(
     scanner: ScannerResult,
     intents: List[ComputeIntent],
@@ -462,7 +542,16 @@ def is_rule_covered(
 ) -> bool:
     if rejections:
         return False
-    if not intents or intents[0].kind != "elementwise" or intents[0].subkind not in {"add", "mul"}:
+    if not intents:
+        return False
+    intent = intents[0]
+    supported_intent = (
+        (intent.kind == "elementwise" and intent.subkind in ELEMENTWISE_OPS)
+        or (intent.kind == "copy" and intent.subkind in COPY_OPS)
+        or (intent.kind == "transpose" and intent.subkind == "2d_contiguous")
+        or (intent.kind == "reduce" and intent.subkind == "row_sum")
+    )
+    if not supported_intent:
         return False
     if not effects or effects[0].kind != "pure_store":
         return False
@@ -470,7 +559,13 @@ def is_rule_covered(
         return False
     if any(space.space != "global" for space in memory_spaces):
         return False
-    return scanner.idx_var is not None and scanner.write_tensor is not None
+    if intent.kind in {"elementwise", "copy"}:
+        return scanner.idx_var is not None and scanner.write_tensor is not None
+    if intent.kind == "transpose":
+        return scanner.rank == 2 and bool(scanner.index_vars.get("row")) and bool(scanner.index_vars.get("col"))
+    if intent.kind == "reduce":
+        return scanner.rank == 2 and scanner.reduction_axis is not None and scanner.write_tensor is not None
+    return False
 
 
 def apply_confidence(score: float, intents: List, effects: List, control_flow: List, sync: List, memory_spaces: List) -> None:

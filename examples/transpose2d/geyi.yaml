@@ -1,0 +1,38 @@
+version: 1
+
+source:
+  files: [transpose.cu]
+  entry: transpose2d
+
+launch:
+  grid: ["ceil_div(cols, 16)", "ceil_div(rows, 16)"]
+  block: [16, 16]
+  shared_memory: 0
+
+symbols:
+  rows: 32
+  cols: 64
+
+tensors:
+  x:
+    dtype: float32
+    shape: ["rows", "cols"]
+    stride: ["cols", 1]
+    layout: row_major_contiguous
+    access: read
+  out:
+    dtype: float32
+    shape: ["cols", "rows"]
+    stride: ["rows", 1]
+    layout: row_major_contiguous
+    access: write
+
+assumptions:
+  - id: no_alias
+    text: "out does not alias x"
+
+verification:
+  reference: golden
+  tolerance:
+    atol: 1e-5
+    rtol: 1e-5

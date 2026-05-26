@@ -5,24 +5,30 @@ from __future__ import annotations
 import json
 import shlex
 
-from geyi.phase0 import run_phase0
+from geyi.phase1 import run_phase1
 
 
 def add_arguments(parser) -> None:
     parser.add_argument("source", help="CUDA source file")
     parser.add_argument("--spec", required=True, help="path to geyi.yaml")
     parser.add_argument("--out", default=None, help="generated project/cache output directory")
+    parser.add_argument("--backend", default="tilelang", choices=["auto", "tilelang", "ascendc"], help="deterministic backend")
+    parser.add_argument("--target", default="auto", choices=["auto", "local_cpu", "scaffold", "cann"], help="execution target")
+    parser.add_argument("--npu-arch", default="dav-2201", help="AscendC NPU architecture, e.g. dav-2201 or dav-3510")
     parser.add_argument("--json", action="store_true", help="print verification report JSON")
     parser.add_argument("--session-root", default=".geyi/sessions", help="session artifact root")
 
 
 def run(args) -> int:
-    result = run_phase0(
+    result = run_phase1(
         args.source,
         spec=args.spec,
         out=args.out,
         session_root=args.session_root,
         reproducible_command=reproducible_command(args),
+        backend=args.backend,
+        target=args.target,
+        npu_arch=args.npu_arch,
     )
     if args.json:
         print(json.dumps(result.verification_report.to_dict(), indent=2, sort_keys=True))
@@ -36,6 +42,7 @@ def print_text_report(result) -> None:
     print("Kernel: %s" % result.analysis.contract.entry)
     print("Contract: %s" % report.contract_hash)
     print("Plan: %s backend=%s template=%s" % (result.plan.strategy, result.plan.backend, result.plan.template))
+    print("Target: %s" % result.plan.parameters.get("target"))
     print("Generated: %s" % result.project.root)
     print("Artifact: %s hash=%s reused=%s" % (result.artifact.path, report.artifact_hash, result.artifact.reused))
     print("Verify: %s passed=%s max_abs_diff=%s" % (report.level.value, report.passed, report.max_abs_diff))
@@ -46,7 +53,12 @@ def print_text_report(result) -> None:
 
 def reproducible_command(args) -> str:
     pieces = ["geyi", "run", args.source, "--spec", args.spec]
+    if args.backend != "tilelang":
+        pieces.extend(["--backend", args.backend])
+    if args.target != "auto":
+        pieces.extend(["--target", args.target])
+    if args.npu_arch != "dav-2201":
+        pieces.extend(["--npu-arch", args.npu_arch])
     if args.out:
         pieces.extend(["--out", args.out])
     return " ".join(shlex.quote(str(item)) for item in pieces)
-
