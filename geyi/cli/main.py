@@ -6,8 +6,10 @@ import argparse
 
 from geyi.config import DEFAULT_SESSION_ROOT
 from geyi.cli import info as info_command
+from geyi.cli import library as library_command
 from geyi.cli import run as run_command
 from geyi.cli import setup as setup_command
+from geyi.cli import tune as tune_command
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,9 +28,15 @@ def build_parser() -> argparse.ArgumentParser:
     run_command.add_arguments(run)
     run.set_defaults(func=run_command.run)
 
+    tune = subparsers.add_parser("tune", help="describe and verify a Phase 3 autotune search space")
+    tune_command.add_arguments(tune)
+    tune.set_defaults(func=tune_command.run)
+
     setup = subparsers.add_parser("setup", help="write a minimal Phase -1 local config")
     setup_command.add_arguments(setup)
     setup.set_defaults(func=setup_command.run)
+
+    library_command.add_arguments(subparsers)
 
     return parser
 

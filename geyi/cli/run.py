@@ -18,6 +18,7 @@ def add_arguments(parser) -> None:
     parser.add_argument("--npu-arch", default="dav-2201", help="AscendC NPU architecture, e.g. dav-2201 or dav-3510")
     parser.add_argument("--json", action="store_true", help="print verification report JSON")
     parser.add_argument("--session-root", default=".geyi/sessions", help="session artifact root")
+    parser.add_argument("--opt-level", default="none", choices=["none", "conservative"], help="Phase 3 conservative optimization hints")
     parser.add_argument("--allow-llm-plan", action="store_true", help="allow Phase 2 constrained LLM planner")
     parser.add_argument("--llm-provider", default="mock", choices=["mock", "openai-compatible", "deepseek"], help="LLM provider for planner")
     parser.add_argument("--llm-model", default=None, help="LLM model name")
@@ -35,6 +36,7 @@ def run(args) -> int:
             backend=args.backend,
             target=args.target,
             npu_arch=args.npu_arch,
+            opt_level=args.opt_level,
             allow_llm_plan=True,
             llm_provider=args.llm_provider,
             llm_model=args.llm_model,
@@ -50,6 +52,7 @@ def run(args) -> int:
             backend=args.backend,
             target=args.target,
             npu_arch=args.npu_arch,
+            opt_level=args.opt_level,
         )
     if args.json:
         print(json.dumps(result.verification_report.to_dict(), indent=2, sort_keys=True))
@@ -68,6 +71,12 @@ def print_text_report(result) -> None:
     print("Artifact: %s hash=%s reused=%s" % (result.artifact.path, report.artifact_hash, result.artifact.reused))
     print("Verify: %s passed=%s max_abs_diff=%s" % (report.level.value, report.passed, report.max_abs_diff))
     print("LLM: used=%s calls=%d" % (report.llm_used, len(getattr(report, "llm_calls", []) or [])))
+    if result.plan.optimization_hints:
+        print("Optimization: opt_level=%s status=%s hints=%d" % (
+            result.plan.optimization_hints.get("opt_level"),
+            result.plan.optimization_hints.get("status"),
+            len(result.plan.optimization_hints.get("hints", [])),
+        ))
     print("Coverage: shapes=%s dtypes=%s hardware=%s" % (report.coverage.shapes, report.coverage.dtypes, report.coverage.hardware))
     print("Out: %s cache_hit=%s" % (result.out_path, result.cache_hit))
     print("Session: %s" % result.analysis.session.path)
@@ -83,6 +92,8 @@ def reproducible_command(args) -> str:
         pieces.extend(["--npu-arch", args.npu_arch])
     if args.out:
         pieces.extend(["--out", args.out])
+    if getattr(args, "opt_level", "none") != "none":
+        pieces.extend(["--opt-level", args.opt_level])
     if getattr(args, "allow_llm_plan", False):
         pieces.append("--allow-llm-plan")
         if args.llm_provider != "mock":

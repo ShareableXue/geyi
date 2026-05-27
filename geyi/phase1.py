@@ -16,6 +16,7 @@ from geyi.backend.ascendc import AscendCBackend
 from geyi.backend.tilelang import TileLangBackend
 from geyi.config import DEFAULT_SESSION_ROOT
 from geyi.planner.plan import TranslationPlan, create_deterministic_plan
+from geyi.phase3 import apply_phase3_optimization_artifacts
 from geyi.session import SessionStore
 from geyi.verifier.ascendc import verify_ascendc
 from geyi.verifier.golden import verify_with_golden
@@ -42,6 +43,7 @@ def run_phase1(
     backend: str = "tilelang",
     target: str = "local_cpu",
     npu_arch: str = "dav-2201",
+    opt_level: str = "none",
 ) -> Phase1RunResult:
     analysis = analyze(source, spec=spec, session_root=session_root, write_session=True)
     if analysis.session is None:
@@ -89,6 +91,7 @@ def run_phase1(
     session.write_json("verification_report.json", report.to_dict())
     session.write_log("run.log", render_run_log(contract.entry, out_path, cache_hit, report, plan))
     mirror_to_out(session, out_path, contract.contract_hash, artifact.artifact_hash, cache_hit, plan)
+    apply_phase3_optimization_artifacts(session, out_path, contract, plan, report, opt_level=opt_level)
 
     return Phase1RunResult(
         analysis=analysis,

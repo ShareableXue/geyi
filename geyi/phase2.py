@@ -16,6 +16,7 @@ from geyi.llm.diagnostics import diagnose_precision_mismatch
 from geyi.llm.planner import LLMPlanResult, plan_with_llm
 from geyi.llm.repair import collect_compile_diagnostic, repair_compile_error
 from geyi.phase1 import create_backend
+from geyi.phase3 import apply_phase3_optimization_artifacts
 from geyi.planner.plan import PlanError, TranslationPlan, create_deterministic_plan
 from geyi.verifier.ascendc import verify_ascendc
 from geyi.verifier.golden import verify_with_golden
@@ -47,6 +48,7 @@ def run_phase2(
     llm_provider: str = "mock",
     llm_model: Optional[str] = None,
     llm_base_url: Optional[str] = None,
+    opt_level: str = "none",
     provider: Optional[LLMProvider] = None,
 ) -> Phase2RunResult:
     analysis = analyze(source, spec=spec, session_root=session_root, write_session=True)
@@ -122,6 +124,7 @@ def run_phase2(
         session.write_json("diagnostics/precision.json", diagnose_precision_mismatch(report))
     session.write_log("run.log", render_phase2_log(contract.entry, out_path, cache_hit, report, plan, llm_calls))
     mirror_to_out(session.path, out_path, contract.contract_hash, artifact.artifact_hash, plan, cache_hit)
+    apply_phase3_optimization_artifacts(session, out_path, contract, plan, report, opt_level=opt_level)
 
     return Phase2RunResult(
         analysis=analysis,

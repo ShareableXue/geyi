@@ -1,6 +1,6 @@
 # Geyi
 
-Phase 2 constrained LLM planner prototype.
+Phase 3 CANN library metadata and conservative performance-hints prototype.
 
 ## Install
 
@@ -138,6 +138,88 @@ The Phase 2 path keeps LLM output constrained to planner JSON. Geyi still owns
 template code generation, compile, golden verification, repair handoff, and the
 final verification report.
 
+## Phase 3 CANN Library Metadata
+
+Build the locked CANN hotset index:
+
+```bash
+conda activate geyi_dev
+geyi library index --lock geyi-library.lock
+```
+
+Search is exact op/alias retrieval. It returns source paths, revision, checksum,
+license, and contract-signature evidence:
+
+```bash
+geyi library search --op rms_norm --json
+```
+
+The default `geyi-library.lock` pins the local CANN open-source operator repos
+under `../cann_opensource_ops_repos`. Each source has a locked revision,
+license, and checksum. A revision, checksum, or disallowed-license mismatch
+fails before an index is emitted. Strategy 0 recall is intentionally exact:
+similar names are not treated as semantic equivalence.
+
+## Phase 3 Performance Hints
+
+Conservative hints can be recorded after the existing correctness path passes:
+
+```bash
+geyi run examples/vector_add/vector_add.cu \
+  --spec examples/vector_add/geyi.yaml \
+  --opt-level conservative
+```
+
+This still runs the normal deterministic compile and golden verification. The
+hints are written to `optimization_hints.json`; Phase 3 does not rewrite kernels
+with low-confidence performance changes.
+
+Describe a small autotune search space with verification attached:
+
+```bash
+geyi tune examples/vector_add/vector_add.cu \
+  --spec examples/vector_add/geyi.yaml \
+  --search-space small
+```
+
+The tuning report records candidate parameters and the baseline verification
+report. It also records candidate UB estimates, cannbot source digests, and
+the profiler policy.
+
+On an NPU environment, run the generated AscendC operator and attach a real
+`msprof op` baseline measurement:
+
+```bash
+geyi tune examples/vector_add/vector_add.cu \
+  --spec examples/vector_add/geyi.yaml \
+  --backend ascendc \
+  --target cann \
+  --search-space small \
+  --profile-generated
+```
+
+This path generates the direct-invoke AscendC executable, runs the generated
+coverage cases on NPU, then profiles the first non-empty passing case. For
+custom runners, attach an explicit command:
+
+```bash
+geyi tune examples/vector_add/vector_add.cu \
+  --spec examples/vector_add/geyi.yaml \
+  --search-space small \
+  --kernel-name vector_add_kernel \
+  --profile-command "python run_vector_add.py"
+```
+
+Geyi wraps this as:
+
+```bash
+msprof op --kernel-name=vector_add_kernel --warm-up=10 --launch-count=5 python run_vector_add.py
+```
+
+The parsed metrics and raw stdout/stderr logs are written to
+`performance_report.json`. Applying candidate-specific code changes and
+selecting a measured winner remain later hardware-integration work.
+
 ## Workflow
 
 For your own CUDA kernel:
@@ -159,11 +241,11 @@ geyi info kernel.cu --spec geyi.yaml --json
    - `rejections`
    - `.geyi/sessions/<session_id>/confidence_report.json`
 
-Use `geyi info` first when you want to inspect the contract and confidence report without generating a project. Use `geyi run` for deterministic paths, and add `--allow-llm-plan` only when a contract routes to the Phase 2 planner.
+Use `geyi info` first when you want to inspect the contract and confidence report without generating a project. Use `geyi run` for deterministic paths, add `--allow-llm-plan` only when a contract routes to the Phase 2 planner, and use `geyi library` when you want auditable CANN hotset retrieval.
 
 ## Verify The Prototype
 
 ```bash
 conda activate geyi_dev
-python -m unittest discover -s tests -v
+python -m pytest -q
 ```

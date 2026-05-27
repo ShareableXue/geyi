@@ -1,0 +1,358 @@
+version: 1
+allowed_licenses:
+  - CANN-Open-Software-License-2.0
+
+sources:
+  - id: cann-ops-nn
+    kind: local_git
+    path: ../cann_opensource_ops_repos/ops-nn
+    revision: 425c2e2f5f631fa506b3857aa24e65cca43fd4c9
+    license: CANN-Open-Software-License-2.0
+    license_file: LICENSE
+    checksum:
+      algorithm: sha256
+      file: LICENSE
+      value: cb282ac2b66d7d6734c3fb354db792b28cf23ab29fbc16d5cfd8bd542bedeb1e
+  - id: cann-ops-math
+    kind: local_git
+    path: ../cann_opensource_ops_repos/ops-math
+    revision: fa6cf70b7cebe444a47dc1a288b06f3da3e41671
+    license: CANN-Open-Software-License-2.0
+    license_file: LICENSE
+    checksum:
+      algorithm: sha256
+      file: LICENSE
+      value: cb282ac2b66d7d6734c3fb354db792b28cf23ab29fbc16d5cfd8bd542bedeb1e
+  - id: cann-ops-transformer
+    kind: local_git
+    path: ../cann_opensource_ops_repos/ops-transformer
+    revision: d338161cde2ac8d739548eaf2e9eee70eef7b382
+    license: CANN-Open-Software-License-2.0
+    license_file: LICENSE
+    checksum:
+      algorithm: sha256
+      file: LICENSE
+      value: cb282ac2b66d7d6734c3fb354db792b28cf23ab29fbc16d5cfd8bd542bedeb1e
+  - id: cann-ops-cv
+    kind: local_git
+    path: ../cann_opensource_ops_repos/ops-cv
+    revision: 0bbd84a67ae57a8bb320232484ce9395af7ba64c
+    license: CANN-Open-Software-License-2.0
+    license_file: LICENSE
+    checksum:
+      algorithm: sha256
+      file: LICENSE
+      value: 0d4e3b4d4ba1672b7d44aaf3d6db8559175083517e4768b9ddb34c5476a8fa7a
+
+hotset:
+  - op: rms_norm
+    aliases: [rmsnorm]
+    family: reduction_norm
+    source: cann-ops-nn
+    paths: [norm/rms_norm]
+    rank: 1
+    contract_signature:
+      intent:
+        kind: reduce
+        subkind: rms_norm
+      inputs:
+        - {name: x, rank: 2, dtypes: [float16, float32], access: read}
+        - {name: weight, rank: 1, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 2, dtypes: [float16, float32], access: write}
+    notes: ["Exact recall only; epsilon/axis variants require user annotation."]
+  - op: layer_norm
+    aliases: [layernorm]
+    family: reduction_norm
+    source: cann-ops-nn
+    paths: [norm/layer_norm]
+    rank: 2
+    contract_signature:
+      intent: {kind: reduce, subkind: layer_norm}
+      inputs:
+        - {name: x, rank: 2, dtypes: [float16, float32], access: read}
+        - {name: gamma, rank: 1, dtypes: [float16, float32], access: read}
+        - {name: beta, rank: 1, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 2, dtypes: [float16, float32], access: write}
+  - op: add_rms_norm
+    aliases: [residual_rms_norm]
+    family: fused_norm
+    source: cann-ops-nn
+    paths: [norm/add_rms_norm]
+    rank: 3
+    contract_signature:
+      intent: {kind: composite, subkind: add_rms_norm}
+      inputs:
+        - {name: x, rank: 2, dtypes: [float16, float32], access: read}
+        - {name: residual, rank: 2, dtypes: [float16, float32], access: read}
+        - {name: weight, rank: 1, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 2, dtypes: [float16, float32], access: write}
+  - op: softmax
+    aliases: [softmax_v2]
+    family: activation
+    source: cann-ops-nn
+    paths: [activation/softmax_v2]
+    rank: 4
+    contract_signature:
+      intent: {kind: reduce, subkind: softmax}
+      inputs:
+        - {name: x, rank: 2, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 2, dtypes: [float16, float32], access: write}
+  - op: log_softmax
+    aliases: [log_softmax_v2]
+    family: activation
+    source: cann-ops-nn
+    paths: [activation/log_softmax_v2]
+    rank: 5
+    contract_signature:
+      intent: {kind: reduce, subkind: log_softmax}
+      inputs:
+        - {name: x, rank: 2, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 2, dtypes: [float16, float32], access: write}
+  - op: relu
+    aliases: [relu_v2]
+    family: activation
+    source: cann-ops-nn
+    paths: [activation/relu]
+    rank: 6
+    contract_signature:
+      intent: {kind: elementwise, subkind: relu}
+      inputs:
+        - {name: x, rank: 1, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 1, dtypes: [float16, float32], access: write}
+  - op: gelu
+    aliases: [gelu_v2]
+    family: activation
+    source: cann-ops-nn
+    paths: [activation/gelu]
+    rank: 7
+    contract_signature:
+      intent: {kind: elementwise, subkind: gelu}
+      inputs:
+        - {name: x, rank: 1, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 1, dtypes: [float16, float32], access: write}
+  - op: fast_gelu
+    aliases: [fastgelu]
+    family: activation
+    source: cann-ops-nn
+    paths: [activation/fast_gelu]
+    rank: 8
+    contract_signature:
+      intent: {kind: elementwise, subkind: fast_gelu}
+      inputs:
+        - {name: x, rank: 1, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 1, dtypes: [float16, float32], access: write}
+  - op: sigmoid
+    aliases: [sigmoid_v2]
+    family: activation
+    source: cann-ops-nn
+    paths: [activation/sigmoid]
+    rank: 9
+    contract_signature:
+      intent: {kind: elementwise, subkind: sigmoid}
+      inputs:
+        - {name: x, rank: 1, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 1, dtypes: [float16, float32], access: write}
+  - op: exp
+    aliases: [exponential]
+    family: math
+    source: cann-ops-math
+    paths: [math/exp]
+    rank: 10
+    contract_signature:
+      intent: {kind: elementwise, subkind: exp}
+      inputs:
+        - {name: x, rank: 1, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 1, dtypes: [float16, float32], access: write}
+  - op: cast
+    aliases: [astype]
+    family: conversion
+    source: cann-ops-math
+    paths: [math/cast]
+    rank: 11
+    contract_signature:
+      intent: {kind: copy, subkind: cast}
+      inputs:
+        - {name: x, rank: 1, dtypes: [float16, float32, int32, int64], access: read}
+      outputs:
+        - {name: y, rank: 1, dtypes: [float16, float32, int32, int64], access: write}
+  - op: transpose
+    aliases: [transpose2d]
+    family: conversion
+    source: cann-ops-math
+    paths: [conversion/transpose]
+    rank: 12
+    contract_signature:
+      intent: {kind: transpose, subkind: 2d_contiguous, aliases: [transpose2d]}
+      inputs:
+        - {name: x, rank: 2, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 2, dtypes: [float16, float32], access: write}
+  - op: reduce_sum
+    aliases: [row_sum, sum]
+    family: reduction
+    source: cann-ops-math
+    paths: [math/reduce_sum]
+    rank: 13
+    contract_signature:
+      intent: {kind: reduce, subkind: reduce_sum, aliases: [row_sum]}
+      inputs:
+        - {name: x, rank: 2, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 1, dtypes: [float16, float32], access: write}
+  - op: reduce_max
+    aliases: [max]
+    family: reduction
+    source: cann-ops-math
+    paths: [math/reduce_max]
+    rank: 14
+    contract_signature:
+      intent: {kind: reduce, subkind: reduce_max}
+      inputs:
+        - {name: x, rank: 2, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 1, dtypes: [float16, float32], access: write}
+  - op: top_k
+    aliases: [top_k_v2, topk]
+    family: sort
+    source: cann-ops-math
+    paths: [math/top_k_v2]
+    rank: 15
+    contract_signature:
+      intent: {kind: custom, subkind: top_k}
+      inputs:
+        - {name: x, rank: 2, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: values, rank: 2, dtypes: [float16, float32], access: write}
+        - {name: indices, rank: 2, dtypes: [int32, int64], access: write}
+  - op: grouped_matmul
+    aliases: [grouped_mat_mul, gmm]
+    family: matmul
+    source: cann-ops-transformer
+    paths: [gmm/grouped_matmul]
+    rank: 16
+    contract_signature:
+      intent: {kind: matmul, subkind: grouped_matmul}
+      inputs:
+        - {name: x, rank: 3, dtypes: [float16, bfloat16], access: read}
+        - {name: weight, rank: 3, dtypes: [float16, bfloat16], access: read}
+      outputs:
+        - {name: y, rank: 3, dtypes: [float16, bfloat16], access: write}
+  - op: grouped_matmul_add
+    aliases: [gmm_add]
+    family: matmul
+    source: cann-ops-transformer
+    paths: [gmm/grouped_matmul_add]
+    rank: 17
+    contract_signature:
+      intent: {kind: composite, subkind: grouped_matmul_add}
+      inputs:
+        - {name: x, rank: 3, dtypes: [float16, bfloat16], access: read}
+        - {name: weight, rank: 3, dtypes: [float16, bfloat16], access: read}
+        - {name: bias, rank: 2, dtypes: [float16, bfloat16], access: read}
+      outputs:
+        - {name: y, rank: 3, dtypes: [float16, bfloat16], access: write}
+  - op: grouped_matmul_swiglu_quant
+    aliases: [gmm_swiglu_quant]
+    family: matmul_fusion
+    source: cann-ops-transformer
+    paths: [gmm/grouped_matmul_swiglu_quant]
+    rank: 18
+    contract_signature:
+      intent: {kind: composite, subkind: grouped_matmul_swiglu_quant}
+      inputs:
+        - {name: x, rank: 3, dtypes: [float16, bfloat16], access: read}
+        - {name: weight, rank: 3, dtypes: [int8, int4], access: read}
+      outputs:
+        - {name: y, rank: 3, dtypes: [int8, float16], access: write}
+  - op: flash_attention_score
+    aliases: [flash_attention]
+    family: attention
+    source: cann-ops-transformer
+    paths: [attention/flash_attention_score]
+    rank: 19
+    contract_signature:
+      intent: {kind: custom, subkind: flash_attention_score}
+      inputs:
+        - {name: q, rank: 4, dtypes: [float16, bfloat16], access: read}
+        - {name: k, rank: 4, dtypes: [float16, bfloat16], access: read}
+        - {name: v, rank: 4, dtypes: [float16, bfloat16], access: read}
+      outputs:
+        - {name: y, rank: 4, dtypes: [float16, bfloat16], access: write}
+  - op: incre_flash_attention
+    aliases: [incremental_flash_attention]
+    family: attention
+    source: cann-ops-transformer
+    paths: [attention/incre_flash_attention]
+    rank: 20
+    contract_signature:
+      intent: {kind: custom, subkind: incre_flash_attention}
+      inputs:
+        - {name: q, rank: 3, dtypes: [float16, bfloat16], access: read}
+        - {name: k_cache, rank: 4, dtypes: [float16, bfloat16], access: read}
+        - {name: v_cache, rank: 4, dtypes: [float16, bfloat16], access: read}
+      outputs:
+        - {name: y, rank: 3, dtypes: [float16, bfloat16], access: write}
+  - op: rotary_position_embedding
+    aliases: [rope, apply_rotary_pos_emb]
+    family: positional_embedding
+    source: cann-ops-transformer
+    paths: [posembedding/rotary_position_embedding, posembedding/apply_rotary_pos_emb]
+    rank: 21
+    contract_signature:
+      intent: {kind: composite, subkind: rope}
+      inputs:
+        - {name: x, rank: 4, dtypes: [float16, bfloat16], access: read}
+        - {name: cos, rank: 2, dtypes: [float16, float32], access: read}
+        - {name: sin, rank: 2, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: y, rank: 4, dtypes: [float16, bfloat16], access: write}
+  - op: kv_rms_norm_rope_cache
+    aliases: [kv_norm_rope_cache]
+    family: transformer_fusion
+    source: cann-ops-transformer
+    paths: [posembedding/kv_rms_norm_rope_cache]
+    rank: 22
+    contract_signature:
+      intent: {kind: composite, subkind: kv_rms_norm_rope_cache}
+      inputs:
+        - {name: kv, rank: 3, dtypes: [float16, bfloat16], access: read}
+        - {name: weight, rank: 1, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: k_cache, rank: 4, dtypes: [float16, bfloat16], access: write}
+        - {name: v_cache, rank: 4, dtypes: [float16, bfloat16], access: write}
+  - op: add
+    aliases: [elementwise_add]
+    family: elementwise
+    source: cann-ops-cv
+    paths: [examples/add_example]
+    rank: 23
+    contract_signature:
+      intent: {kind: elementwise, subkind: add}
+      inputs:
+        - {name: a, rank: 1, dtypes: [float16, float32], access: read}
+        - {name: b, rank: 1, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: out, rank: 1, dtypes: [float16, float32], access: write}
+  - op: nms_with_mask
+    aliases: [nms]
+    family: vision
+    source: cann-ops-cv
+    paths: [image/nms_with_mask]
+    rank: 24
+    contract_signature:
+      intent: {kind: custom, subkind: nms_with_mask}
+      inputs:
+        - {name: boxes, rank: 2, dtypes: [float16, float32], access: read}
+      outputs:
+        - {name: selected_boxes, rank: 2, dtypes: [float16, float32], access: write}
+        - {name: selected_idx, rank: 1, dtypes: [int32, int64], access: write}
