@@ -7,6 +7,7 @@ import argparse
 from geyi.config import DEFAULT_SESSION_ROOT
 from geyi.cli import info as info_command
 from geyi.cli import library as library_command
+from geyi.cli import patch as patch_command
 from geyi.cli import run as run_command
 from geyi.cli import setup as setup_command
 from geyi.cli import tune as tune_command
@@ -37,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup.set_defaults(func=setup_command.run)
 
     library_command.add_arguments(subparsers)
+    patch_command.add_arguments(subparsers)
 
     return parser
 

@@ -1,6 +1,6 @@
 # Geyi
 
-Phase 3 CANN library metadata and conservative performance-hints prototype.
+Phase 4 model-level harness prototype for source-available PyTorch extensions.
 
 ## Install
 
@@ -219,6 +219,29 @@ msprof op --kernel-name=vector_add_kernel --warm-up=10 --launch-count=5 python r
 The parsed metrics and raw stdout/stderr logs are written to
 `performance_report.json`. Applying candidate-specific code changes and
 selecting a measured winner remain later hardware-integration work.
+
+## Phase 4 Model-Level Harness
+
+Run a Python entrypoint with the source-available PyTorch extension patch:
+
+```bash
+geyi patch python examples/pytorch_load_inline/run.py
+```
+
+This intercepts `torch.utils.cpp_extension.load_inline`, writes inline C++/CUDA
+sources plus an auto-generated `geyi.yaml` under `.geyi/model_harness`, and
+records an op-level cache key. Compiled-only `.so` loads are reported as
+black-box boundaries; Geyi does not decompile them or treat them as source.
+The default mode is capture-only and offline-friendly; pass `--execute-original`
+when you want to call the real PyTorch loader after capture.
+
+Session artifacts include:
+
+```text
+.geyi/sessions/<session_id>/
+├── model_harness_report.json
+└── logs/patch.log
+```
 
 ## Workflow
 
